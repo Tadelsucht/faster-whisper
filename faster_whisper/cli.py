@@ -1,10 +1,23 @@
 import argparse
 import json
 import os
+import sys
 import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
+
+# Set UTF-8 encoding for Windows console
+if sys.platform == "win32":
+    try:
+        # Try to set console to UTF-8
+        os.system("chcp 65001 >nul 2>&1")
+        # Reconfigure stdout/stderr for UTF-8
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+    except:
+        pass
 
 from .transcribe import WhisperModel
 from .tokenizer import _LANGUAGE_CODES
@@ -45,25 +58,25 @@ class SimpleWriter:
     def __call__(self, result, audio_path, **kwargs):
         import json
         
+        # Keep the original filename with extension, just add new extension
         audio_basename = os.path.basename(audio_path)
-        audio_basename = os.path.splitext(audio_basename)[0]
         
         # Write text file
         if self.output_format in ["txt", "all"]:
             output_path = os.path.join(self.output_dir, audio_basename + ".txt")
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_path, "w", encoding="utf-8", newline='') as f:
                 f.write(result["text"])
         
         # Write JSON file
         if self.output_format in ["json", "all"]:
             output_path = os.path.join(self.output_dir, audio_basename + ".json")
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_path, "w", encoding="utf-8", newline='') as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
         
         # Write SRT file
         if self.output_format in ["srt", "all"]:
             output_path = os.path.join(self.output_dir, audio_basename + ".srt")
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_path, "w", encoding="utf-8", newline='') as f:
                 for i, segment in enumerate(result["segments"], 1):
                     f.write(f"{i}\n")
                     f.write(f"{format_timestamp(segment['start'], True, ',')} --> {format_timestamp(segment['end'], True, ',')}\n")
@@ -72,7 +85,7 @@ class SimpleWriter:
         # Write VTT file
         if self.output_format in ["vtt", "all"]:
             output_path = os.path.join(self.output_dir, audio_basename + ".vtt")
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_path, "w", encoding="utf-8", newline='') as f:
                 f.write("WEBVTT\n\n")
                 for segment in result["segments"]:
                     f.write(f"{format_timestamp(segment['start'])} --> {format_timestamp(segment['end'])}\n")
@@ -81,7 +94,7 @@ class SimpleWriter:
         # Write TSV file
         if self.output_format in ["tsv", "all"]:
             output_path = os.path.join(self.output_dir, audio_basename + ".tsv")
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_path, "w", encoding="utf-8", newline='') as f:
                 f.write("start\tend\ttext\n")
                 for segment in result["segments"]:
                     f.write(f"{int(segment['start']*1000)}\t{int(segment['end']*1000)}\t{segment['text'].strip()}\n")
@@ -315,10 +328,20 @@ def cli():
             
             # Print transcription if verbose
             if verbose:
-                print(f"\nDetected language: {info.language}")
-                print(f"Transcription:")
-                for segment in segments_list:
-                    print(f"[{format_timestamp(segment.start)} --> {format_timestamp(segment.end)}] {segment.text.strip()}")
+                try:
+                    print(f"\nDetected language: {info.language}")
+                    print(f"Transcription:")
+                    for segment in segments_list:
+                        # Ensure proper encoding for German umlauts
+                        text = segment.text.strip()
+                        print(f"[{format_timestamp(segment.start)} --> {format_timestamp(segment.end)}] {text}")
+                except UnicodeEncodeError:
+                    # Fallback for encoding issues
+                    print(f"\nDetected language: {info.language}")
+                    print(f"Transcription:")
+                    for segment in segments_list:
+                        text = segment.text.strip().encode('utf-8', errors='replace').decode('utf-8')
+                        print(f"[{format_timestamp(segment.start)} --> {format_timestamp(segment.end)}] {text}")
             
             # Convert segments to dict format for compatibility with writer
             result = {
