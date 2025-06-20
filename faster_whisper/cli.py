@@ -179,7 +179,19 @@ def cli():
     device: str = args.pop("device")
     device_index: int = args.pop("device_index")
     compute_type: str = args.pop("compute_type")
-    os.makedirs(output_dir, exist_ok=True)
+    
+    # Normalize paths and handle Windows path issues
+    if output_dir:
+        output_dir = os.path.normpath(output_dir.strip().strip('"').strip("'"))
+    if model_dir:
+        model_dir = os.path.normpath(model_dir.strip().strip('"').strip("'"))
+    
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except OSError as e:
+        print(f"Error creating output directory '{output_dir}': {e}")
+        print("Please check the path syntax and permissions.")
+        return
 
     if model_size_or_path.endswith(".en") and args["language"] not in {"en", "English", None}:
         if args["language"] is not None:
